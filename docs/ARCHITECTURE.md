@@ -28,6 +28,54 @@ database:
 - **PostgreSQL** — durable store and the synchronization point. Duplicate
   protection and live updates both lean on Postgres primitives.
 
+### System & job-lifecycle diagram
+
+> Renders on GitHub. Also available interactively on
+> [mermaid.live](https://mermaid.live/view#pako:eNptVM1u4zYQfpUBTzGSNNgtcjG2WyiS2hhRHVu24W7NxYKWRjJ3JVLLnzSG4x4L9Np36DP03kfpkxSkJFvd9mKLnG--7-NwhgeSyRzJmBSV_DnbMWVgGVEBAKDttlSs2UGYTOLpckNJWHEUhpL3LQBgNdlQkiLLDERM77aSqfzNVt28vcj7Jfz1J3yUW-3-M4XMoPuKkvnoxIMip-ILzTh8vaEkWC_cl8uYllw8g8InVBqhUfJ577bvl8vZYuAomDlL8XOjUGu3GsTWDxtK1lJ9QuUIMtT6AvXIG1ZWABc5NihyFKba_5-76G5zQclMalMqXMwTSkbv-9hqAtfXb18omT0ulnDDGn7jjk3Ji3chOnMdiAuNyrjCwIWT5KIcOWh0N0B-5aGLRQwVf0KwTc4MesZVR7h-6FFN-UFIw4s9SAHZjokST9JnbAuVVTWG3CJcQhR8f62Z4brgmMMldF6GVqI7lwf3cTA7HCi5R9ZAo7hU3Ozhs0WLvoCnrb9__R10tsPcVpj7VXvtXWNcAiu5KKGQCgrGlUCtR5Qcj62ak_F6YRJMfnAtYGTNM8gqxmvPsJpFwTKG9X2cxqANM1bDN71xj8htU_HMdVqjpMHMcClO1-l5u0q02eO-GbqDp6up62orYMdEXqHypFgzXoHmta3YibClTFdTb_nx4UDJwmaO61tKjn38sa38HvULhME0PFASMpFhBQo_W9QG8xbu_QXT0MOFfIHocRpvzj4zWTcVGszPp-nRJ_I4SeJomOOVqkGOI_V-09hZSTGzSnFRnj2k8YB0Gv_oZr-_UhD4bEDZc0V7tDMcT6NXG0oKLrjeDTQdidd0XfWvqrisNF6m7w6UKDRq_yGTVhh4A1_D0NEyfXf2dBeEbpa3LPskiwIu4SM3pruoX15puIFb9_P6Vp8cuJQvr_2_zX7Wcb6-CybJoJQF48M6umh7pmTu3oUIWX6doDMCczcX7fPgS57MO20rFGpZPbnR-O0PuPVDmsSpK3HbYqxCdX5jfWY74jUTlrmeMWrfeiZXpEZVM56TMTlQYnZYIyVjSnIsmK0MJUdyRZg1crEXGRkbZfGKtA9JxFmpWN1vKmnLHRkXrNJ4RRomfpKyCx7_Afih9vI).
+> Source: [`docs/architecture-diagram.mmd`](architecture-diagram.mmd).
+
+```mermaid
+flowchart TD
+    subgraph CLIENT["Client"]
+      UI["React Dashboard<br/>(dashboard · jobs · create · DLQ)"]
+    end
+
+    subgraph EC2["AWS EC2 · Nginx reverse proxy · HTTPS"]
+      API["Express API"]
+      WK["Worker process(es)<br/>run independently"]
+    end
+
+    DB[("PostgreSQL")]
+
+    UI -->|"POST /api/jobs"| API
+    API -->|"insert job (pending)"| DB
+    API -.->|"SSE live updates"| UI
+    WK -.->|"pg_notify on change"| API
+
+    WK -->|"poll: due + DAG-satisfied + pending"| DB
+    DB --> HEAP{{"Heap priority queue<br/>priority → scheduled → created<br/>(+ aging for fairness)"}}
+    HEAP --> CLAIM["Atomic claim<br/>UPDATE WHERE status = pending<br/>duplicate protection"]
+    CLAIM -->|"status: processing"| RUN["Run handler<br/>email simulation"]
+
+    RUN --> OK{"Success?"}
+
+    OK -->|yes| CANC{"Cancel requested?"}
+    CANC -->|no| DONE["status: completed"]
+    CANC -->|yes| CANCELLED["status: cancelled"]
+    DONE --> REC{"Recurring?"}
+    REC -->|yes| NEXT["schedule next run"]
+    REC -->|no| END1["finished"]
+    NEXT --> DB
+
+    OK -->|no| RETRY{"retry_count < 3 ?"}
+    RETRY -->|yes| BACK["backoff + jitter<br/>~1s / 5s / 25s"]
+    BACK -->|"status: pending"| DB
+    RETRY -->|no| FAIL["status: failed"]
+    FAIL --> DLQ[("Dead-Letter Queue")]
+    DLQ -->|"unresolved ≥ 5"| ALERT["email alert"]
+    DLQ -.->|"manual retry"| DB
+```
+
 ## 2. Data model
 
 | Table | Purpose |

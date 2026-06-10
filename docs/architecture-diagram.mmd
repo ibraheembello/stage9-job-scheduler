@@ -1,0 +1,39 @@
+flowchart TD
+    subgraph CLIENT["Client"]
+      UI["React Dashboard<br/>(dashboard · jobs · create · DLQ)"]
+    end
+
+    subgraph EC2["AWS EC2 · Nginx reverse proxy · HTTPS"]
+      API["Express API"]
+      WK["Worker process(es)<br/>run independently"]
+    end
+
+    DB[("PostgreSQL")]
+
+    UI -->|"POST /api/jobs"| API
+    API -->|"insert job (pending)"| DB
+    API -.->|"SSE live updates"| UI
+    WK -.->|"pg_notify on change"| API
+
+    WK -->|"poll: due + DAG-satisfied + pending"| DB
+    DB --> HEAP{{"Heap priority queue<br/>priority → scheduled → created<br/>(+ aging for fairness)"}}
+    HEAP --> CLAIM["Atomic claim<br/>UPDATE WHERE status = pending<br/>duplicate protection"]
+    CLAIM -->|"status: processing"| RUN["Run handler<br/>email simulation"]
+
+    RUN --> OK{"Success?"}
+
+    OK -->|yes| CANC{"Cancel requested?"}
+    CANC -->|no| DONE["status: completed"]
+    CANC -->|yes| CANCELLED["status: cancelled"]
+    DONE --> REC{"Recurring?"}
+    REC -->|yes| NEXT["schedule next run"]
+    REC -->|no| END1["finished"]
+    NEXT --> DB
+
+    OK -->|no| RETRY{"retry_count < 3 ?"}
+    RETRY -->|yes| BACK["backoff + jitter<br/>~1s / 5s / 25s"]
+    BACK -->|"status: pending"| DB
+    RETRY -->|no| FAIL["status: failed"]
+    FAIL --> DLQ[("Dead-Letter Queue")]
+    DLQ -->|"unresolved ≥ 5"| ALERT["email alert"]
+    DLQ -.->|"manual retry"| DB
