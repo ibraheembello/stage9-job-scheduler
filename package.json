@@ -1,0 +1,49 @@
+{
+  "name": "stage9-job-scheduler",
+  "version": "1.0.0",
+  "description": "Background job scheduler with heap priority queue, timing-wheel alternative, DAG workflows, DLQ, and live UI",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/workers/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "worker": "node dist/workers/worker.js",
+    "migrate": "tsx src/db/migrate.ts",
+    "bench": "tsx bench/benchmark.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "job-scheduler",
+    "priority-queue",
+    "heap",
+    "timing-wheel",
+    "dag",
+    "dead-letter-queue"
+  ],
+  "author": "Ibraheem Bello <belloibrahimolawale@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "@types/swagger-ui-express": "^4.1.7",
+    "@types/yamljs": "^0.2.34",
+    "puppeteer-core": "^25.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

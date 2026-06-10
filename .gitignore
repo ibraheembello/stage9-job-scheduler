@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+frontend/node_modules/
+frontend/dist/
+coverage/
+.DS_Store
+
+# local process logs
+*.out
+*.err
