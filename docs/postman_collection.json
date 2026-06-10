@@ -1,0 +1,86 @@
+{
+  "info": {
+    "name": "Dilamme Job Scheduler",
+    "description": "Stage 9 background job scheduler API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [{ "key": "baseUrl", "value": "http://localhost:4000" }],
+  "item": [
+    {
+      "name": "Get stats",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/stats" }
+    },
+    {
+      "name": "List jobs",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/jobs" }
+    },
+    {
+      "name": "Create email job (High)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/jobs",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"send_email\",\n  \"priority\": 1,\n  \"payload\": { \"to\": \"test@gmail.com\", \"subject\": \"Welcome\" }\n}"
+        }
+      }
+    },
+    {
+      "name": "Create scheduled job",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/jobs",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"send_email\",\n  \"payload\": { \"to\": \"a@b.com\", \"subject\": \"Later\" },\n  \"scheduled_at\": \"2030-01-01T00:00:00Z\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Create recurring job",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/jobs",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"send_email\",\n  \"payload\": { \"to\": \"a@b.com\", \"subject\": \"Tick\" },\n  \"recurring_interval\": \"every_1_minute\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Create DAG job (depends on)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/jobs",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"send_email\",\n  \"payload\": { \"to\": \"a@b.com\", \"subject\": \"After deps\" },\n  \"depends_on\": [\"1\", \"2\"]\n}"
+        }
+      }
+    },
+    {
+      "name": "Get job by id",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/jobs/1" }
+    },
+    {
+      "name": "Get job logs",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/jobs/1/logs" }
+    },
+    {
+      "name": "Cancel job",
+      "request": { "method": "POST", "url": "{{baseUrl}}/api/jobs/1/cancel" }
+    },
+    {
+      "name": "List DLQ",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/dlq" }
+    },
+    {
+      "name": "Retry DLQ entry",
+      "request": { "method": "POST", "url": "{{baseUrl}}/api/dlq/1/retry" }
+    }
+  ]
+}

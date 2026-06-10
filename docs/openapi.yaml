@@ -1,0 +1,178 @@
+openapi: 3.0.3
+info:
+  title: Dilamme Background Job Scheduler API
+  version: 1.0.0
+  description: >
+    REST API for a background job scheduler with a heap-based priority queue,
+    DAG workflows, retries with exponential backoff, a dead-letter queue, and
+    live updates over Server-Sent Events.
+servers:
+  - url: http://localhost:4000
+    description: Local
+components:
+  schemas:
+    Priority:
+      type: integer
+      enum: [1, 2, 3]
+      description: "1 = High, 2 = Medium, 3 = Low"
+    Status:
+      type: string
+      enum: [pending, processing, completed, failed, cancelled]
+    RecurringInterval:
+      type: string
+      enum: [every_1_minute, every_5_minutes, every_1_hour]
+      nullable: true
+    CreateJob:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          example: send_email
+        priority:
+          $ref: '#/components/schemas/Priority'
+        payload:
+          type: object
+          example: { to: "test@gmail.com", subject: "Welcome" }
+        scheduled_at:
+          type: string
+          format: date-time
+          example: "2026-06-10T10:00:00Z"
+        recurring_interval:
+          $ref: '#/components/schemas/RecurringInterval'
+        depends_on:
+          type: array
+          items: { type: string }
+          description: IDs of jobs that must complete before this one runs (DAG edges).
+    Job:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string }
+        payload: { type: object }
+        priority: { $ref: '#/components/schemas/Priority' }
+        status: { $ref: '#/components/schemas/Status' }
+        scheduled_at: { type: string, format: date-time }
+        recurring_interval: { $ref: '#/components/schemas/RecurringInterval' }
+        retry_count: { type: integer }
+        max_retries: { type: integer }
+        last_error: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+paths:
+  /api/stats:
+    get:
+      summary: Job counts grouped by status (dashboard)
+      responses:
+        '200':
+          description: Counts by status
+          content:
+            application/json:
+              schema:
+                type: object
+                example: { pending: 0, processing: 1, completed: 12, failed: 2, cancelled: 1 }
+  /api/jobs:
+    get:
+      summary: List all jobs (newest first)
+      responses:
+        '200':
+          description: Array of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Job' }
+    post:
+      summary: Create a job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateJob' }
+      responses:
+        '201':
+          description: Created job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/jobs/{id}:
+    get:
+      summary: Get a single job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/jobs/{id}/logs:
+    get:
+      summary: Structured lifecycle log for a job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ordered list of log events
+  /api/jobs/{id}/cancel:
+    post:
+      summary: Cancel a job
+      description: >
+        Pending jobs are cancelled immediately. A job already processing has a
+        cancellation requested; it finishes its current run, does not retry or
+        recur, and ends as cancelled.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Cancellation result
+        '400':
+          description: Job is in a terminal state and cannot be cancelled
+  /api/dlq:
+    get:
+      summary: List unresolved dead-letter queue entries
+      responses:
+        '200':
+          description: DLQ entries with job details
+  /api/dlq/{id}/retry:
+    post:
+      summary: Manually retry a dead-lettered job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The job, reset to pending
+        '404':
+          description: DLQ entry not found or already resolved
+  /api/events:
+    get:
+      summary: Server-Sent Events stream of job updates
+      description: Emits a `job_update` event whenever any job changes status.
+      responses:
+        '200':
+          description: text/event-stream
