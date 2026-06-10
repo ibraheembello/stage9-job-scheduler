@@ -263,9 +263,13 @@ Deployed manually to an **AWS EC2** instance — no managed PaaS:
 
 | Resource | URL |
 |----------|-----|
-| Live UI | _to be added after deploy_ |
-| API | _to be added after deploy_ |
-| Swagger | _`/api/docs` on the deployed host_ |
+| **Live UI** | https://dilamme-jobs.duckdns.org |
+| **API** | https://dilamme-jobs.duckdns.org/api |
+| **Swagger** | https://dilamme-jobs.duckdns.org/api/docs |
+
+> Deployed on a self-managed **AWS EC2** `t3.small` (eu-west-2, Ubuntu 24.04),
+> PostgreSQL + API + worker under **pm2**, **Nginx** reverse proxy, **HTTPS**
+> via Let's Encrypt, public domain via **DuckDNS**. No managed PaaS.
 
 ---
 
